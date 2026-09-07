@@ -7,20 +7,25 @@ export default async function handler(req, res) {
     const { image, mediaType, instruction } = req.body;
     
     if (!image || !mediaType) {
-      return res.status(400).json({ error: 'Data gambar tidak lengkap.' });
+      return res.status(400).json({ error: 'Data gambar tidak lengkap dari client.' });
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Environment variable ANTHROPIC_API_KEY belum diset di Vercel.' });
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
         model: "claude-3-5-sonnet-20241022",
         max_tokens: 1000,
-        system: "Kamu adalah penulis prompt profesional untuk image generation. Tugasmu menganalisis foto dan instruksi user, lalu menghasilkan prompt siap pakai dalam Bahasa Indonesia yang sangat detail, jelas, dan tanpa basa-basi.",
+        system: "Kamu adalah penulis prompt profesional untuk image generation. Analisis gambar dan instruksi, lalu berikan hasil prompt dalam Bahasa Indonesia yang detail, jelas, dan siap pakai.",
         messages: [
           {
             role: "user",
@@ -35,7 +40,7 @@ export default async function handler(req, res) {
               },
               { 
                 type: "text", 
-                text: instruction 
+                text: instruction || "Buatkan prompt detail dari foto ini." 
               }
             ]
           }
@@ -46,14 +51,15 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'Gagal terhubung ke Anthropic API' });
+      return res.status(response.status).json({ 
+        error: data.error?.message || 'Terjadi kesalahan dari server Anthropic API.' 
+      });
     }
 
-    // Ekstrak teks dengan aman dari struktur content array Claude
     const textContent = data.content && data.content[0] ? data.content[0].text : '';
 
     return res.status(200).json({ content: [{ text: textContent }] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Server error: ' + err.message });
   }
 }
