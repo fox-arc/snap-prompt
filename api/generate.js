@@ -6,6 +6,10 @@ export default async function handler(req, res) {
   try {
     const { image, mediaType, instruction } = req.body;
     
+    if (!image || !mediaType) {
+      return res.status(400).json({ error: 'Data gambar tidak lengkap.' });
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -14,15 +18,25 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-3-5-sonnet-20241022",
         max_tokens: 1000,
-        system: "Kamu adalah penulis prompt profesional untuk image generation model GPT Image 2. Kamu sangat teliti dan detail dalam mendeskripsikan foto secara visual, dan selalu menulis dalam Bahasa Indonesia yang jelas dan siap pakai sebagai prompt, tanpa basa-basi.",
+        system: "Kamu adalah penulis prompt profesional untuk image generation. Tugasmu menganalisis foto dan instruksi user, lalu menghasilkan prompt siap pakai dalam Bahasa Indonesia yang sangat detail, jelas, dan tanpa basa-basi.",
         messages: [
           {
             role: "user",
             content: [
-              { type: "image", source: { type: "base64", media_type: mediaType, data: image } },
-              { type: "text", text: instruction }
+              { 
+                type: "image", 
+                source: { 
+                  type: "base64", 
+                  media_type: mediaType, 
+                  data: image 
+                } 
+              },
+              { 
+                type: "text", 
+                text: instruction 
+              }
             ]
           }
         ]
@@ -30,7 +44,15 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-    return res.status(200).json(data);
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.error?.message || 'Gagal terhubung ke Anthropic API' });
+    }
+
+    // Ekstrak teks dengan aman dari struktur content array Claude
+    const textContent = data.content && data.content[0] ? data.content[0].text : '';
+
+    return res.status(200).json({ content: [{ text: textContent }] });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
