@@ -7,40 +7,31 @@ export default async function handler(req, res) {
     const { image, mediaType, instruction } = req.body;
     
     if (!image || !mediaType) {
-      return res.status(400).json({ error: 'Data gambar tidak lengkap dari client.' });
+      return res.status(400).json({ error: 'Data gambar tidak lengkap.' });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Environment variable ANTHROPIC_API_KEY belum diset di Vercel.' });
+      return res.status(500).json({ error: 'Environment variable GEMINI_API_KEY belum diset di Vercel.' });
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 1000,
-        system: "Kamu adalah penulis prompt profesional untuk image generation. Analisis gambar dan instruksi, lalu berikan hasil prompt dalam Bahasa Indonesia yang detail, jelas, dan siap pakai.",
-        messages: [
+        contents: [
           {
-            role: "user",
-            content: [
-              { 
-                type: "image", 
-                source: { 
-                  type: "base64", 
-                  media_type: mediaType, 
-                  data: image 
-                } 
+            parts: [
+              {
+                inline_data: {
+                  mime_type: mediaType,
+                  data: image
+                }
               },
-              { 
-                type: "text", 
-                text: instruction || "Buatkan prompt detail dari foto ini." 
+              {
+                text: "Kamu adalah penulis prompt profesional untuk image generation model GPT Image 2. " + (instruction || "Buatkan prompt detail dari foto ini.") + " Berikan hasil dalam Bahasa Indonesia yang detail dan siap pakai tanpa basa-basi."
               }
             ]
           }
@@ -51,12 +42,10 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ 
-        error: data.error?.message || 'Terjadi kesalahan dari server Anthropic API.' 
-      });
+      return res.status(response.status).json({ error: data.error?.message || 'Gagal terhubung ke Gemini API' });
     }
 
-    const textContent = data.content && data.content[0] ? data.content[0].text : '';
+    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     return res.status(200).json({ content: [{ text: textContent }] });
   } catch (err) {
